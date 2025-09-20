@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import pickle
+import sklearn # Import sklearn to check version
 
 # --- PAGE CONFIG ---
 st.set_page_config(
@@ -20,10 +21,11 @@ def load_model(model_path):
             model = pickle.load(file)
         return model
     except FileNotFoundError:
-        st.error(f"Model file not found at {model_path}. Please make sure it's in the same directory.")
+        st.error(f"Model file not found at {model_path}. Please make sure 'AdaBoost_best_model.pkl' is in the same directory as this script.")
         return None
     except Exception as e:
         st.error(f"An error occurred while loading the model: {e}")
+        st.warning(f"This often happens due to a library version mismatch. Your app is running scikit-learn version {sklearn.__version__}. Please ensure this matches the version used to train and save the model.")
         return None
 
 model = load_model('AdaBoost_best_model.pkl')
@@ -106,6 +108,8 @@ def load_css():
             font-weight: bold;
             transition: all 0.3s ease-in-out;
             box-shadow: 0 4px 15px rgba(233, 69, 96, 0.4);
+            display: block;
+            margin: 0 auto;
         }
         .stButton button:hover {
             background-color: #c73049;
@@ -188,14 +192,17 @@ if model:
         StreamingTV = st.selectbox("Streaming TV", ["No", "Yes", "No internet service"])
         StreamingMovies = st.selectbox("Streaming Movies", ["No", "Yes", "No internet service"])
 
+    st.markdown("<br>", unsafe_allow_html=True)
+
     # --- PREDICTION LOGIC ---
     if st.button("Predict Churn"):
         # Mappings for categorical features
         # These need to match how the model was trained.
         gender_map = {'Male': 1, 'Female': 0}
         binary_map = {'No': 0, 'Yes': 1}
-        multiline_map = {'No': 0, 'Yes': 1, 'No phone service': 2}
-        online_service_map = {'No': 0, 'Yes': 1, 'No internet service': 2}
+        # Correcting potential mapping issues based on common datasets
+        multiline_map = {'No': 0, 'Yes': 1, 'No phone service': 0} # Often 'No phone service' is treated like 'No'
+        online_service_map = {'No': 0, 'Yes': 1, 'No internet service': 0} # Often 'No internet service' is treated like 'No'
         contract_map = {'Month-to-month': 0, 'One year': 1, 'Two year': 2}
         payment_map = {
             'Electronic check': 0, 
@@ -230,23 +237,28 @@ if model:
         input_df = pd.DataFrame([input_data])
         
         # Ensure column order matches the model's training data
-        feature_order = model.feature_names_in_
-        input_df = input_df[feature_order]
+        try:
+            feature_order = model.feature_names_in_
+            input_df = input_df[feature_order]
 
-        # Make prediction
-        prediction = model.predict(input_df)[0]
-        prediction_proba = model.predict_proba(input_df)[0]
+            # Make prediction
+            prediction = model.predict(input_df)[0]
+            prediction_proba = model.predict_proba(input_df)[0]
 
-        # Display result
-        st.markdown('<div class="result-container">', unsafe_allow_html=True)
-        if prediction == 1:
-            st.markdown('<p class="result-text churn">Prediction: This customer is likely to CHURN</p>', unsafe_allow_html=True)
-            probability = prediction_proba[1] * 100
-            st.write(f"**Probability of Churn:** {probability:.2f}%")
-        else:
-            st.markdown('<p class="result-text no-churn">Prediction: This customer is likely to STAY</p>', unsafe_allow_html=True)
-            probability = prediction_proba[0] * 100
-            st.write(f"**Probability of Staying:** {probability:.2f}%")
-        st.markdown('</div>', unsafe_allow_html=True)
+            # Display result
+            st.markdown('<div class="result-container">', unsafe_allow_html=True)
+            if prediction == 1:
+                st.markdown('<p class="result-text churn">Prediction: This customer is likely to CHURN</p>', unsafe_allow_html=True)
+                probability = prediction_proba[1] * 100
+                st.write(f"**Probability of Churn:** {probability:.2f}%")
+            else:
+                st.markdown('<p class="result-text no-churn">Prediction: This customer is likely to STAY</p>', unsafe_allow_html=True)
+                probability = prediction_proba[0] * 100
+                st.write(f"**Probability of Staying:** {probability:.2f}%")
+            st.markdown('</div>', unsafe_allow_html=True)
+        except Exception as e:
+            st.error(f"An error occurred during prediction. Please check if the input data is correct and matches the model's requirements. Error: {e}")
+
 
 st.markdown('</div>', unsafe_allow_html=True) # Close main content container
+
